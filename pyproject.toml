@@ -1,0 +1,34 @@
+[project]
+name = "ecominsight-agent"
+version = "0.1.0"
+description = "Multi-agent ecommerce analytics workflow with BigQuery and MCP reporting tools."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "google-adk",
+    "google-cloud-bigquery",
+    "mcp",
+    "pydantic",
+    "python-dotenv",
+]
+
+[dependency-groups]
+dev = [
+    "deepeval",
+    "pytest",
+    "ruff",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["ecominsight_agent/tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
