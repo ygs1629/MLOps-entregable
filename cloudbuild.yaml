@@ -1,19 +1,27 @@
-#__________________________________________________________________________________________________
+#__________________________________________________________________________________________________________________________________
 # Tras previamente haber hecho:
 # conexión entre el proyecto de GCP el repo (1st gen por configuración y una service account nueva)
 # y configurar una PR a main como trigger de ejecución
 #
-# 1º Paso de CI: 
-# instalar uv para depencias, comprobación estilo y errores estáticos
-#__________________________________________________________________________________________________
+# CI: 
+# instalar uv para depencias, comprobación estilo y errores estáticos.
+# Ejecución pytest para integración continua. Ruta de tests indicada en el .toml. 
+# Guardado de logs en cloud logging en vez de un bucket de GCS
+#
+# Tras previamente haber hecho el comando por terminal (repositorio de imagenes docker registradas)
+# gcloud artifacts repositories create ecominsight-repo --repository-format=docker --location=us-central1 --description="Repositorio Docker para los agentes de EcomInsight"
+# Y dar permisos a la service account para que haga registro en el artifact registry
+#__________________________________________________________________________________________________________________________________
 
 steps:
-  - name: 'python:3.11-slim' 
+  #########################
+  # Continuous integration
+  #########################
+  - name: 'python:3.13-slim' 
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        # 1. Instalar uv
         pip install --upgrade pip
         pip install uv
         
@@ -29,7 +37,34 @@ steps:
         echo "Ejecutando Tests (Pytest)..."
         uv run pytest
 
-timeout: '600s'
+  ######################
+  # Continuous delivery
+  ######################
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Imagen-cicd-mlops-entregable'
+    args: [
+      'build', 
+      # hash del commit para trazabilidad
+      '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:$SHORT_SHA',
+      # tag latest
+      '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:latest',
+      '.'
+    ]
+
+  #######################
+  # Continuous deployment
+  #######################
+
+  # Despliegue en cloud run. 
+  # Preferible sobre functions (mejor manejo de timeout, asincronia y entorno en el contendor) y suficiente abstracción (mejor que GKE o Compute Engine)
+
+# Push automático por cloud build al finalizar a artifact registry en el repositorio creado
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:$SHORT_SHA'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:latest'
+
+
+timeout: '900s' 
 
 options:
   logging: CLOUD_LOGGING_ONLY
