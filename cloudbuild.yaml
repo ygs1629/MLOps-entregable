@@ -1,22 +1,31 @@
 #__________________________________________________________________________________________________________________________________
-# Tras previamente haber hecho:
-# conexión entre el proyecto de GCP el repo (1st gen por configuración y una service account nueva)
-# y configurar una PR a main como trigger de ejecución
+# REQUISITOS PREVIOS:
+# 1. Conexión establecida entre el proyecto de GCP (project3grupo3) y el repositorio de GitHub.
+# 2. Configuración de un Trigger en Cloud Build vinculado a Pull Requests hacia la rama 'main'.
+# 3. Creación manual del repositorio en Artifact Registry mediante la terminal autenticada:
+#    gcloud artifacts repositories create ecominsight-repo --repository-format=docker --location=us-central1 --description="..."
+# 4. Asignación de Roles IAM a la Service Account del pipeline (cicd-ecominsight-agent@project3grupo3.iam.gserviceaccount.com):
+#    - Escritor de registros (roles/logging.logWriter)
+#    - Escritor de Artifact Registry (roles/artifactregistry.writer)
+#    - Administrador de Cloud Run (roles/run.admin)
+#    - Usuario de cuenta de servicio (roles/iam.serviceAccountUser)
 #
-# CI: 
-# instalar uv para depencias, comprobación estilo y errores estáticos.
-# Ejecución pytest para integración continua. Ruta de tests indicada en el .toml. 
-# Guardado de logs en cloud logging en vez de un bucket de GCS
+# FASES DEL PIPELINE:
+# [CI] Continuous integration: 
+#      Instalación automatizada con 'uv'. Validación estática de formato y estilo con 'Ruff'.
+#      Ejecución de batería de pruebas unitarias/integración con 'Pytest'.
+# [CD] Continuos delivery:
+#      Construcción de imagen Docker optimizada (Multi-stage build para ahorrar peso) etiquetada con $SHORT_SHA y 'latest'.
+#      Registro inmediato e inmutable del artefacto en Google Artifact Registry.
+# [CD] Continuous deploy:
+#      Lanzamiento del contenedor en Google Cloud Run. Elección de arquitectura Serverless elástica sobre
+#      Cloud Functions (por su óptimo manejo de timeouts, asincronía y control de entorno nativo) y sobre 
+#      GKE/Compute Engine (por la abstracción y minimización de costes de mantenimiento).
 #
-# Tras previamente haber hecho el comando por terminal (repositorio de imagenes docker registradas project3grupo3)
-# gcloud artifacts repositories create ecominsight-repo --repository-format=docker --location=us-central1 --description="Repositorio Docker para los agentes de EcomInsight"
-# Y dar permisos a la service account para que haga registro en el artifact registry
-# CD:
-# construye la imagen docker, se pushea a artifact registry para versionarla y se despliega en un contenedor en cloud run
-#
-# Elección de cloud run sobre functions (mejor manejo de timeout, asincronia y entorno en el contendor) 
-# y suficiente abstracción (mejor que GKE o Compute Engine)
-# 
+# VERIFICACIÓN POST-DESPLIEGUE (Próximo paso a integrar en el ci/cd pipeline para validar el éxito de la parte cd ):
+# Para validar la disponibilidad y el protocolo MCP (Model Context Protocol) sobre Server-Sent Events (SSE) 
+# de extremo a extremo, se debe ejecutar de forma local el script cliente que gestiona el arranque:
+#      uv run python ecominsight_agent/tests/e2e/test_cloud_agent.py
 #__________________________________________________________________________________________________________________________________
 
 steps:
