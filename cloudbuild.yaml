@@ -8,9 +8,15 @@
 # Ejecución pytest para integración continua. Ruta de tests indicada en el .toml. 
 # Guardado de logs en cloud logging en vez de un bucket de GCS
 #
-# Tras previamente haber hecho el comando por terminal (repositorio de imagenes docker registradas)
+# Tras previamente haber hecho el comando por terminal (repositorio de imagenes docker registradas project3grupo3)
 # gcloud artifacts repositories create ecominsight-repo --repository-format=docker --location=us-central1 --description="Repositorio Docker para los agentes de EcomInsight"
 # Y dar permisos a la service account para que haga registro en el artifact registry
+# CD:
+# construye la imagen docker, se pushea a artifact registry para versionarla y se despliega en un contenedor en cloud run
+#
+# Elección de cloud run sobre functions (mejor manejo de timeout, asincronia y entorno en el contendor) 
+# y suficiente abstracción (mejor que GKE o Compute Engine)
+# 
 #__________________________________________________________________________________________________________________________________
 
 steps:
@@ -37,32 +43,44 @@ steps:
         echo "Ejecutando Tests (Pytest)..."
         uv run pytest
 
-  ######################
+  #####################
   # Continuous delivery
-  ######################
+  #####################
   - name: 'gcr.io/cloud-builders/docker'
-    id: 'Imagen-cicd-mlops-entregable'
+    id: 'Construir-Imagen'
     args: [
       'build', 
-      # hash del commit para trazabilidad
+      # hash del commit para trazabilidad 
       '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:$SHORT_SHA',
       # tag latest
       '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:latest',
       '.'
     ]
 
+  # registro en artifact registry antes de desplegar
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Subir-Imagen-Artifact-Registry'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:$SHORT_SHA']
+
   #######################
   # Continuous deployment
   #######################
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    id: 'Desplegar-en-Cloud-Run'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'ecominsight-agent-service' 
+      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:$SHORT_SHA'
+      - '--region=us-central1'
+      - '--port=8080' 
+      - '--allow-unauthenticated' # Permite peticiones por terminal sin tokens de GCP
 
-  # Despliegue en cloud run. 
-  # Preferible sobre functions (mejor manejo de timeout, asincronia y entorno en el contendor) y suficiente abstracción (mejor que GKE o Compute Engine)
-
-# Push automático por cloud build al finalizar a artifact registry en el repositorio creado
+# Registra ambas etiquetas en la interfaz de Cloud Build al finalizar con éxito
 images:
   - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:$SHORT_SHA'
   - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:latest'
-
 
 timeout: '900s' 
 
