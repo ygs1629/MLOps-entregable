@@ -28,8 +28,10 @@ DEFAULT_KPI_DIR = REPO_ROOT / "reports" / "kpi_cards"
 
 mcp = FastMCP(
     name="ecominsight-reporting-mcp-server",
-    host=os.getenv("ECOMINSIGHT_MCP_HOST", "127.0.0.1"),
-    port=int(os.getenv("ECOMINSIGHT_MCP_PORT", "9003")),
+    # "0.0.0.0" para que Cloud Run pueda inyectar tráfico exterior
+    host=os.getenv("ECOMINSIGHT_MCP_HOST", os.getenv("HOST", "0.0.0.0")),
+    # Leer primero 'PORT' (de GCP), luego el declaro, y si no hay nada, el 8080
+    port=int(os.getenv("PORT", os.getenv("ECOMINSIGHT_MCP_PORT", "8080"))),
 )
 
 
