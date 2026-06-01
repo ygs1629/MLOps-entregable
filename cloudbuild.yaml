@@ -1,0 +1,97 @@
+#__________________________________________________________________________________________________________________________________
+# REQUISITOS PREVIOS:
+# 1. Conexión establecida entre el proyecto de GCP (project3grupo3) y el repositorio de GitHub.
+# 2. Configuración de un Trigger en Cloud Build vinculado a Pull Requests hacia la rama 'main'.
+# 3. Creación manual del repositorio en Artifact Registry mediante la terminal autenticada:
+#    gcloud artifacts repositories create ecominsight-repo --repository-format=docker --location=us-central1 --description="..."
+# 4. Asignación de Roles IAM a la Service Account del pipeline (cicd-ecominsight-agent@project3grupo3.iam.gserviceaccount.com):
+#    - Escritor de registros (roles/logging.logWriter)
+#    - Escritor de Artifact Registry (roles/artifactregistry.writer)
+#    - Administrador de Cloud Run (roles/run.admin)
+#    - Usuario de cuenta de servicio (roles/iam.serviceAccountUser)
+#
+# FASES DEL PIPELINE:
+# [CI] Continuous integration: 
+#      Instalación automatizada con 'uv'. Validación estática de formato y estilo con 'Ruff'.
+#      Ejecución de batería de pruebas unitarias/integración con 'Pytest'.
+# [CD] Continuos delivery:
+#      Construcción de imagen Docker optimizada (Multi-stage build para ahorrar peso) etiquetada con $SHORT_SHA y 'latest'.
+#      Registro inmediato e inmutable del artefacto en Google Artifact Registry.
+# [CD] Continuous deploy:
+#      Lanzamiento del contenedor en Google Cloud Run. Elección de arquitectura Serverless elástica sobre
+#      Cloud Functions (por su óptimo manejo de timeouts, asincronía y control de entorno nativo) y sobre 
+#      GKE/Compute Engine (por la abstracción y minimización de costes de mantenimiento).
+#
+# VERIFICACIÓN POST-DESPLIEGUE (Próximo paso a integrar en el ci/cd pipeline para validar el éxito de la parte cd ):
+# Para validar la disponibilidad y el protocolo MCP (Model Context Protocol) sobre Server-Sent Events (SSE) 
+# de extremo a extremo, se debe ejecutar de forma local el script cliente que gestiona el arranque:
+#      uv run python ecominsight_agent/tests/e2e/test_cloud_agent.py
+#__________________________________________________________________________________________________________________________________
+
+steps:
+  #########################
+  # Continuous integration
+  #########################
+  - name: 'python:3.13-slim' 
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        pip install --upgrade pip
+        pip install uv
+        
+        echo " Sincronizando dependencias con uv..."
+        uv sync
+        
+        echo "Comprobando formato (Ruff Format)..."
+        uv run ruff format --check .
+        
+        echo "Ejecutando Linter (Ruff Check)..."
+        uv run ruff check .
+
+        echo "Ejecutando Tests (Pytest)..."
+        uv run pytest
+
+  #####################
+  # Continuous delivery
+  #####################
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Construir-Imagen'
+    args: [
+      'build', 
+      # hash del commit para trazabilidad 
+      '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:$SHORT_SHA',
+      # tag latest
+      '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:latest',
+      '.'
+    ]
+
+  # registro en artifact registry antes de desplegar
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Subir-Imagen-Artifact-Registry'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:$SHORT_SHA']
+
+  #######################
+  # Continuous deployment
+  #######################
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    id: 'Desplegar-en-Cloud-Run'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'ecominsight-agent-service' 
+      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:$SHORT_SHA'
+      - '--region=us-central1'
+      - '--port=8080' 
+      - '--allow-unauthenticated' # Permite peticiones por terminal sin tokens de GCP
+
+# Registra ambas etiquetas en la interfaz de Cloud Build al finalizar con éxito
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:$SHORT_SHA'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecominsight-repo/agent-image:latest'
+
+timeout: '900s' 
+
+options:
+  logging: CLOUD_LOGGING_ONLY
