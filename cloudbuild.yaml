@@ -1,0 +1,32 @@
+#__________________________________________________________________________________________________
+# Tras previamente haber hecho:
+# conexión entre el proyecto de GCP el repo (1st gen por configuración y una service account nueva)
+# y configurar una PR a main como trigger de ejecución
+#
+# 1º Paso de CI: 
+# instalar uv para depencias, comprobación estilo y errores estáticos
+#__________________________________________________________________________________________________
+
+steps:
+  - name: 'python:3.11-slim' 
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        # 1. Instalar uv
+        pip install --upgrade pip
+        pip install uv
+        
+        echo " Sincronizando dependencias con uv..."
+        uv sync
+        
+        echo "Comprobando formato (Ruff Format)..."
+        uv run ruff format --check .
+        
+        echo "Ejecutando Linter (Ruff Check)..."
+        uv run ruff check .
+
+        echo "Ejecutando Tests (Pytest)..."
+        uv run pytest
+
+timeout: '600s'
