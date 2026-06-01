@@ -30,3 +30,6 @@ steps:
         uv run pytest
 
 timeout: '600s'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
