@@ -29,4 +29,4 @@ COPY ecominsight_agent /app/ecominsight_agent
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Comando para arrancar el agente dentro del contenedor
-CMD ["python", "-m", "ecominsight_agent.agent"]
+CMD ["python", "-m", "ecominsight_agent.mcp_server.reporting_server"]
