@@ -11,6 +11,7 @@ Desktop.ini
 *.swp
 *.swo
 *~
+~$*.docx
 
 # --- Local environment and secrets ---
 .env
@@ -31,11 +32,16 @@ credentials.json
 service-account*.json
 service_account*.json
 *-service-account.json
+*-sa*.json
 *-credentials.json
+project3grupo3-*.json
+gcp-*.json
 gcloud-*.json
 google-application-credentials*.json
 client_secret*.json
 token.json
+keys/
+.keys/
 secrets/
 .secrets/
 
